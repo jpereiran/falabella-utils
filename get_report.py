@@ -3,10 +3,22 @@ import pandas as pd
 import xlsxwriter
 import re
 import time
-from multiprocessing import Pool
 from bs4 import BeautifulSoup
+from multiprocessing import Pool
+from requests.sessions import SessionRedirectMixin
+
+def get_redirect_target(
+        self, resp, _orig=SessionRedirectMixin.get_redirect_target):
+    try:
+        return _orig(self, resp)
+    except UnicodeDecodeError:
+        return resp.headers['location']
 
 start = time.time()
+
+s = requests.Session()
+
+SessionRedirectMixin.get_redirect_target = get_redirect_target
 
 img = "https://falabella.scene7.com/is/image/FalabellaPE/defaultPE?&wid=25&hei=25"
 base = "https://falabella.scene7.com/is/image/FalabellaPE/"
@@ -16,7 +28,7 @@ busca = "https://www.falabella.com.pe/falabella-pe/search/?Ntt="
 
 def get_prod(pr):
 	try:
-		response = requests.head(busca+pr)
+		response = s.head(busca+pr)
 		if response.status_code != 302:
 			return()
 		url = response.headers['location'].replace("product/","")
@@ -31,8 +43,27 @@ def get_prod(pr):
 	except:
 		return(pr,pr)
 
+def get_marca(pr):
+	try:
+		response = s.head(busca+pr)
+		if response.status_code != 302:
+			return()
+		url = response.headers['location']
+		if url == 'https://www.falabella.com.pe/falabella-pe/':
+			return ()
+		if url.find("noSearchResult") != -1:
+		  	return()
+		else:
+			url = 'https://www.falabella.com.pe' + url
+			text = s.get(url).text
+			soup = BeautifulSoup(text, 'html.parser')
+			scripts = soup.findAll("h6")
+			return(pr,scripts[0].text)
+	except:
+		return(pr,pr)
+
 def get_imag(prod):
-	response = requests.get(base+prod+"?&wid=25&hei=25")
+	response = s.get(base+prod+"?&wid=25&hei=25")
 	if response.content == imagen:
 		return(1,prod)
 	else:
@@ -40,7 +71,7 @@ def get_imag(prod):
 
 def get_pub(prod):
 	try:
-		response = requests.head(busca+prod)
+		response = s.head(busca+prod)
 		if response.status_code != 302:
 			return(0,prod)	   
 		url = response.headers['location']
@@ -56,6 +87,7 @@ def get_pub(prod):
 #Parte de skus
 f = open('Lista')
 lista =f.read().splitlines()
+marcas = []
 tiene_pub = []
 no_tiene_pub = []
 errores = []
@@ -77,11 +109,15 @@ print(end - start)
 print('procese lista')
 
 if __name__ == '__main__':
-	with Pool(16) as p:
+	with Pool(18) as p:
 		skus.append(p.map(get_pub, lista))
 		end = time.time()
 		print(end - start)
 		print('procese pub')    
+		marcas.append(p.map(get_marca, lista))
+		end = time.time()
+		print(end - start)
+		print('procese marcas') 
 		imag.append(p.map(get_imag, lista))
 		end = time.time()
 		print(end - start)
@@ -99,6 +135,8 @@ if __name__ == '__main__':
 	if prods[0] ==  []:
 		prods[0] = [('','')]
 	sku_prod, prod_prod = zip(*prods[0])
+	marcas[0] = list(filter(None, marcas[0]))
+	sku_marca, marca = zip(*marcas[0])
 	#sku_cat, cat_cat, url_cat = zip(*cats[0])
 	for sk in skus[0]:
 		if sk[0] == 2:
@@ -131,6 +169,10 @@ if __name__ == '__main__':
 	s10 = pd.Series(errores, name='SKU')
 	df4 = pd.concat([s10], axis=1)
 
+	s11 = pd.Series(sku_marca, name='SKU')
+	s12 = pd.Series(marca, name='Marca')
+	df5 = pd.concat([s11,s12], axis=1)
+
 	writer_orig = pd.ExcelWriter('Resultado.xlsx', engine='xlsxwriter')
 
 	#Hoja 1
@@ -158,6 +200,15 @@ if __name__ == '__main__':
 	worksheet.set_column('A:D', 15)
 	cell_format = workbook.add_format({'bold': 1,'border': 1,'align': 'center', 'valign': 'vcenter','fg_color':'#FF0000'})
 	worksheet.write('A1', "Errores", cell_format)
+
+  	#Hoja 5
+	df5.to_excel(writer_orig, index=False, sheet_name='Marcas',startrow=1)
+	worksheet = writer_orig.sheets['Marcas']
+	worksheet.set_zoom(80)
+	worksheet.set_column('A:D', 15)
+	#cell_format = workbook.add_format({'bold': 1,'border': 1,'align': 'center', 'valign': 'vcenter','fg_color':'#FF0000'})
+	#worksheet.write('A1', "Marcas", cell_format)
+	
 	writer_orig.save()
   
 	end = time.time()

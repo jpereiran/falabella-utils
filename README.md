@@ -1,6 +1,6 @@
 # Falabella-Utils
 
-Falabella-utils are Python scripts for extracting the information of a SKU from [Saga Falabella](https://falabella.com.pe/falabella-pe/) peruvian website.
+Falabella-utils are Python scripts for scraping the information of a SKU from [Saga Falabella](https://falabella.com.pe/falabella-pe/) peruvian website.
 
 ## Requirements
 

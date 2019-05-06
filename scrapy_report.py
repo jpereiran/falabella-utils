@@ -1,5 +1,6 @@
 import logging
 import time
+import re
 import requests
 import xlsxwriter
 import pandas as pd
@@ -71,7 +72,7 @@ class FalabellaSkuDataSpider(scrapy.Spider):
 				marcas.append(marca)
 				if url_prod.find("prod") != -1:
 					sku_prod.append(sku)
-					prods.append(re.search('prod(.+?)/', url).group(0).replace("/",""))
+					prods.append(re.search('prod(.+?)/', url_prod).group(0).replace("/",""))
 				else:
 					sku_prod.append(sku)
 					prods.append(sku)
